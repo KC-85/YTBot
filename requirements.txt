@@ -1,0 +1,28 @@
+# Google API and Authentication Libraries
+google-api-python-client==2.83.0
+google-auth==2.23.0
+google-auth-oauthlib==1.0.0
+google-auth-httplib2==0.1.0
+
+# Environment Variable Management
+python-dotenv==1.0.0
+
+# JSON Web Token (JWT) Support (if needed)
+PyJWT==2.8.0
+
+# MongoDB Client (optional, for database interaction)
+pymongo==4.5.0
+
+# Logging and Monitoring
+requests==2.31.0
+
+# (Optional) AI Libraries - for sentiment analysis, NLP, etc.
+transformers==4.31.0
+torch==2.0.1
+scikit-learn==1.3.0
+
+# Async Support (if you want to use async for API calls)
+aiohttp==3.8.5
+
+# Web Framework (optional, if you want to build a dashboard or API endpoint)
+Flask==2.3.2
