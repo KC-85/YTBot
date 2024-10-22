@@ -2,30 +2,44 @@
 
 import logging
 import pickle
+import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-import pandas as pd
+from sklearn.metrics import accuracy_score, classification_report
 
-def train_spam_detection_model(data_path):
+def train_spam_detection_model(data_path, file_type='excel'):
     """
     Trains a spam detection model using a dataset of chat messages.
 
     Parameters:
-        data_path (str): The path to the CSV file containing labeled chat messages.
-                         The file should have two columns: "message" and "label".
-                         "message" contains the chat text, and "label" is 0 for non-spam, 1 for spam.
+        data_path (str): The path to the dataset file containing labeled chat messages.
+                         The file should have two columns: "CONTENT" and "CLASS".
+                         "CONTENT" contains the chat text, and "CLASS" is 0 for non-spam, 1 for spam.
+        file_type (str): The type of the file, either 'csv' or 'excel'.
 
     Returns:
         model (Pipeline): The trained machine learning model pipeline.
     """
     try:
-        # Load dataset
-        data = pd.read_csv(data_path)
-        messages = data['message']
-        labels = data['label']
+        # Load dataset based on the file type
+        if file_type == 'csv':
+            data = pd.read_csv(data_path)
+        elif file_type == 'excel':
+            data = pd.read_excel(data_path)
+        else:
+            logging.error("Unsupported file type. Use 'csv' or 'excel'.")
+            return None
+        
+        # Ensure the necessary columns exist in the dataset
+        if 'CONTENT' not in data.columns or 'CLASS' not in data.columns:
+            logging.error("Dataset must contain 'CONTENT' and 'CLASS' columns.")
+            return None
+
+        # Extracting the relevant columns
+        messages = data['CONTENT']
+        labels = data['CLASS']
 
         # Split dataset into training and test sets
         X_train, X_test, y_train, y_test = train_test_split(messages, labels, test_size=0.2, random_state=42)
@@ -44,6 +58,7 @@ def train_spam_detection_model(data_path):
         predictions = pipeline.predict(X_test)
         accuracy = accuracy_score(y_test, predictions)
         logging.info(f"Model accuracy: {accuracy:.2f}")
+        logging.info("\n" + classification_report(y_test, predictions))
 
         return pipeline
 
