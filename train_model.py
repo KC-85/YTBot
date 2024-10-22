@@ -1,7 +1,7 @@
 from ai.machine_learn import train_spam_detection_model, save_model
 
 # Provide the full path to your Excel dataset file
-dataset_path = r"C:\Users\kdcro\OneDrive\Desktop\ml_data_yt.xlsx"
+dataset_path = r"ml_data_yt.xlsx"
 
 # Train the model using the Excel file
 model = train_spam_detection_model(dataset_path, file_type='excel')
