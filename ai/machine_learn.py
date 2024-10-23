@@ -1,10 +1,13 @@
-# ai/machine_learn.py
+# machine_learn.py
 
 import logging
 import pickle
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
@@ -20,7 +23,7 @@ def train_spam_detection_model(data_path, file_type='excel'):
         file_type (str): The type of the file, either 'csv' or 'excel'.
 
     Returns:
-        model (Pipeline): The trained machine learning model pipeline.
+        model (Pipeline): The trained machine learning model pipeline with the highest accuracy.
     """
     try:
         # Load dataset based on the file type
@@ -44,23 +47,41 @@ def train_spam_detection_model(data_path, file_type='excel'):
         # Split dataset into training and test sets
         X_train, X_test, y_train, y_test = train_test_split(messages, labels, test_size=0.2, random_state=42)
 
-        # Create a pipeline for transforming the data and training the model
-        pipeline = Pipeline([
-            ('tfidf', TfidfVectorizer(stop_words='english')),
-            ('classifier', MultinomialNB())
-        ])
+        # Define a set of models to test
+        models = {
+            'MultinomialNB': MultinomialNB(),
+            'LogisticRegression': LogisticRegression(max_iter=1000),
+            'RandomForest': RandomForestClassifier(n_estimators=100),
+            'SVC': SVC()
+        }
 
-        # Train the model
-        pipeline.fit(X_train, y_train)
-        logging.info("Model training completed.")
+        best_model = None
+        best_accuracy = 0
 
-        # Test the model
-        predictions = pipeline.predict(X_test)
-        accuracy = accuracy_score(y_test, predictions)
-        logging.info(f"Model accuracy: {accuracy:.2f}")
-        logging.info("\n" + classification_report(y_test, predictions))
+        # Iterate through models and choose the best one based on accuracy
+        for name, model in models.items():
+            pipeline = Pipeline([
+                ('tfidf', TfidfVectorizer(stop_words='english')),
+                ('classifier', model)
+            ])
+            pipeline.fit(X_train, y_train)
 
-        return pipeline
+            # Test the model
+            predictions = pipeline.predict(X_test)
+            accuracy = accuracy_score(y_test, predictions)
+            logging.info(f"Model: {name}, Accuracy: {accuracy:.2f}")
+
+            # Log the classification report for further evaluation
+            logging.info(f"\nClassification Report for {name}:\n" + classification_report(y_test, predictions))
+
+            # Check if this model has the best accuracy so far
+            if accuracy > best_accuracy:
+                best_model = pipeline
+                best_accuracy = accuracy
+
+        logging.info(f"Best model chosen with accuracy: {best_accuracy:.2f}")
+
+        return best_model
 
     except Exception as e:
         logging.error(f"Error training the spam detection model: {e}")
@@ -75,8 +96,8 @@ def save_model(model, model_path="spam_detection_model.pkl"):
         model_path (str): The path where the model should be saved.
     """
     try:
-        with open(model_path, 'wb') as model_file:
-            pickle.dump(model, model_file)
+        with open(model_path, 'wb') as file:
+            pickle.dump(model, file)
         logging.info(f"Model saved at {model_path}")
     except Exception as e:
         logging.error(f"Error saving model: {e}")
@@ -92,29 +113,10 @@ def load_model(model_path="spam_detection_model.pkl"):
         model (Pipeline): The loaded machine learning model pipeline.
     """
     try:
-        with open(model_path, 'rb') as model_file:
-            model = pickle.load(model_file)
+        with open(model_path, 'rb') as file:
+            model = pickle.load(file)
         logging.info(f"Model loaded from {model_path}")
         return model
     except Exception as e:
         logging.error(f"Error loading model: {e}")
         return None
-
-def predict_spam(model, message):
-    """
-    Predicts whether a message is spam or not using the trained model.
-
-    Parameters:
-        model (Pipeline): The trained machine learning model pipeline.
-        message (str): The chat message to classify.
-
-    Returns:
-        bool: True if the message is spam, otherwise False.
-    """
-    try:
-        prediction = model.predict([message])[0]
-        logging.info(f"Message: {message} | Prediction: {'Spam' if prediction == 1 else 'Not Spam'}")
-        return prediction == 1
-    except Exception as e:
-        logging.error(f"Error predicting spam: {e}")
-        return False
