@@ -76,7 +76,7 @@ def train_spam_detection_model(preprocessed_data_path):
         # Define parameter grids for each model
         param_grids = {
             'MultinomialNB': {},
-            'LogisticRegression': {'C': [0.1, 1, 10, 100], 'max_iter': [500, 1000, 2000]},
+            'LogisticRegression': {'C': [0.1, 1, 10, 100], 'max_iter': [1000, 2000, 4000]},
             'RandomForest': {
                 'n_estimators': [50, 100, 150],
                 'max_depth': [None, 10, 20, 30],
