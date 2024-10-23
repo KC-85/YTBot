@@ -120,3 +120,21 @@ def load_model(model_path="spam_detection_model.pkl"):
     except Exception as e:
         logging.error(f"Error loading model: {e}")
         return None
+
+def predict_spam(model, message):
+    """
+    Predicts whether a message is spam or not using the trained model.
+
+    Parameters:
+        model (Pipeline): The trained machine learning model pipeline.
+        message (str): The chat message to classify.
+
+    Returns:
+        bool: True if the message is spam, otherwise False.
+    """
+    try:
+        prediction = model.predict([message])[0]
+        return prediction == 1
+    except Exception as e:
+        logging.error(f"Error predicting spam: {e}")
+        return False
