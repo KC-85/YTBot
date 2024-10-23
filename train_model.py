@@ -4,7 +4,7 @@ from ai.machine_learn import save_model
 from sklearn.model_selection import GridSearchCV
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -63,6 +63,38 @@ def tune_model(X_train, y_train, model, param_grid, use_scaling=False):
     logging.info(f"Best parameters for {model.__class__.__name__}: {grid_search.best_params_}")
     return grid_search.best_estimator_
 
+def train_voting_ensemble(X_train, y_train):
+    """
+    Trains a Voting Classifier using Logistic Regression, RandomForest, and SVC models.
+
+    Parameters:
+        X_train (array-like): Training data features.
+        y_train (array-like): Training data labels.
+
+    Returns:
+        VotingClassifier: The trained ensemble model.
+    """
+    # Define individual models with best parameters
+    logistic_regression = Pipeline([
+        ('scaler', StandardScaler(with_mean=False)),
+        ('classifier', LogisticRegression(C=1, max_iter=1000))
+    ])
+
+    random_forest = RandomForestClassifier(n_estimators=150, max_depth=None, min_samples_split=5, min_samples_leaf=1, random_state=42)
+    svc = SVC(C=1, kernel='linear', probability=True)
+    
+    # Create the ensemble voting classifier
+    ensemble = VotingClassifier(estimators=[
+        ('lr', logistic_regression),
+        ('rf', random_forest),
+        ('svc', svc)
+    ], voting='soft')  # Soft voting to use probabilities
+    
+    # Train the ensemble
+    ensemble.fit(X_train, y_train)
+    
+    return ensemble
+
 def train_spam_detection_model(preprocessed_data_path):
     """
     Trains a spam detection model using preprocessed data.
@@ -84,63 +116,19 @@ def train_spam_detection_model(preprocessed_data_path):
         # Split the resampled dataset into training and test sets
         X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
 
-        # Define parameter grids for each model
-        param_grids = {
-            'MultinomialNB': {},
-            'LogisticRegression': {
-                'classifier__C': [0.1, 1, 10, 100],
-                'classifier__max_iter': [1000, 2000, 4000]
-            },
-            'RandomForest': {
-                'classifier__n_estimators': [50, 100, 150],
-                'classifier__max_depth': [None, 10, 20, 30],
-                'classifier__min_samples_split': [2, 5, 10],
-                'classifier__min_samples_leaf': [1, 2, 4]
-            },
-            'SVC': {
-                'classifier__C': [0.1, 1, 10],
-                'classifier__kernel': ['linear', 'rbf']
-            }
-        }
+        # Train the voting ensemble
+        logging.info("Training the voting ensemble...")
+        ensemble = train_voting_ensemble(X_train, y_train)
+        
+        # Evaluate the ensemble
+        predictions = ensemble.predict(X_test)
+        accuracy = accuracy_score(y_test, predictions)
+        logging.info(f"Ensemble Model: Voting Classifier, Tuned Accuracy: {accuracy:.2f}")
 
-        # Define models
-        models = {
-            'MultinomialNB': MultinomialNB(),
-            'LogisticRegression': LogisticRegression(),
-            'RandomForest': RandomForestClassifier(random_state=42),
-            'SVC': SVC()
-        }
+        # Log the classification report for further evaluation
+        logging.info(f"\nClassification Report for Voting Classifier:\n" + classification_report(y_test, predictions))
 
-        best_model = None
-        best_accuracy = 0
-
-        # Tune and evaluate each model
-        for name, model in models.items():
-            logging.info(f"Starting Grid Search for {name}...")
-            use_scaling = True if name == 'LogisticRegression' else False
-            best_estimator = tune_model(X_train, y_train, model, param_grids[name], use_scaling)
-            
-            # Evaluate the tuned model
-            pipeline = Pipeline([
-                ('classifier', best_estimator.named_steps['classifier'])
-            ])
-            pipeline.fit(X_train, y_train)
-            
-            predictions = pipeline.predict(X_test)
-            accuracy = accuracy_score(y_test, predictions)
-            logging.info(f"Model: {name}, Tuned Accuracy: {accuracy:.2f}")
-
-            # Log the classification report for further evaluation
-            logging.info(f"\nClassification Report for {name}:\n" + classification_report(y_test, predictions))
-
-            # Check if this model has the best accuracy so far
-            if accuracy > best_accuracy:
-                best_model = pipeline
-                best_accuracy = accuracy
-
-        logging.info(f"Best model chosen with tuned accuracy: {best_accuracy:.2f}")
-
-        return best_model
+        return ensemble
 
     except Exception as e:
         logging.error(f"Error training the spam detection model: {e}")
