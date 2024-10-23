@@ -1,5 +1,3 @@
-# train_model.py
-
 import logging
 import pickle
 from ai.machine_learn import save_model
@@ -9,6 +7,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
@@ -34,7 +33,7 @@ def load_preprocessed_data(file_path):
         logging.error(f"Error loading preprocessed data: {e}")
         return None, None, None
 
-def tune_model(X_train, y_train, model, param_grid):
+def tune_model(X_train, y_train, model, param_grid, use_scaling=False):
     """
     Perform Grid Search to find the best hyperparameters for the given model.
     
@@ -43,11 +42,23 @@ def tune_model(X_train, y_train, model, param_grid):
         y_train (array-like): Training data labels.
         model: The model to tune (e.g., LogisticRegression()).
         param_grid (dict): Hyperparameter grid for the model.
+        use_scaling (bool): Whether to apply feature scaling (only used for Logistic Regression).
 
     Returns:
         best_model: The model with the best found hyperparameters.
     """
-    grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+    # Create the pipeline with optional scaling
+    if use_scaling:
+        pipeline = Pipeline([
+            ('scaler', StandardScaler(with_mean=False)),  # StandardScaler for sparse matrices
+            ('classifier', model)
+        ])
+    else:
+        pipeline = Pipeline([
+            ('classifier', model)
+        ])
+
+    grid_search = GridSearchCV(estimator=pipeline, param_grid=param_grid, cv=5, scoring='accuracy', n_jobs=-1)
     grid_search.fit(X_train, y_train)
     logging.info(f"Best parameters for {model.__class__.__name__}: {grid_search.best_params_}")
     return grid_search.best_estimator_
@@ -76,14 +87,20 @@ def train_spam_detection_model(preprocessed_data_path):
         # Define parameter grids for each model
         param_grids = {
             'MultinomialNB': {},
-            'LogisticRegression': {'C': [0.1, 1, 10, 100], 'max_iter': [1000, 2000, 4000]},
-            'RandomForest': {
-                'n_estimators': [50, 100, 150],
-                'max_depth': [None, 10, 20, 30],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4]
+            'LogisticRegression': {
+                'classifier__C': [0.1, 1, 10, 100],
+                'classifier__max_iter': [1000, 2000, 4000]
             },
-            'SVC': {'C': [0.1, 1, 10], 'kernel': ['linear', 'rbf']}
+            'RandomForest': {
+                'classifier__n_estimators': [50, 100, 150],
+                'classifier__max_depth': [None, 10, 20, 30],
+                'classifier__min_samples_split': [2, 5, 10],
+                'classifier__min_samples_leaf': [1, 2, 4]
+            },
+            'SVC': {
+                'classifier__C': [0.1, 1, 10],
+                'classifier__kernel': ['linear', 'rbf']
+            }
         }
 
         # Define models
@@ -100,11 +117,12 @@ def train_spam_detection_model(preprocessed_data_path):
         # Tune and evaluate each model
         for name, model in models.items():
             logging.info(f"Starting Grid Search for {name}...")
-            best_estimator = tune_model(X_train, y_train, model, param_grids[name])
+            use_scaling = True if name == 'LogisticRegression' else False
+            best_estimator = tune_model(X_train, y_train, model, param_grids[name], use_scaling)
             
             # Evaluate the tuned model
             pipeline = Pipeline([
-                ('classifier', best_estimator)
+                ('classifier', best_estimator.named_steps['classifier'])
             ])
             pipeline.fit(X_train, y_train)
             
