@@ -1,11 +1,13 @@
 import pandas as pd
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from imblearn.over_sampling import SMOTE
 import pickle
+import re
 
 def preprocess_data(file_path, save_path):
     """
-    Preprocesses the data by applying TF-IDF and SMOTE to balance the dataset.
+    Preprocesses the data by applying TF-IDF, additional features, and SMOTE to balance the dataset.
 
     Parameters:
         file_path (str): Path to the input dataset file (Excel or CSV).
@@ -24,15 +26,34 @@ def preprocess_data(file_path, save_path):
         X = data['CONTENT']
         y = data['CLASS']
 
-        # Convert the text data to numerical features using TfidfVectorizer
-        tfidf_vectorizer = TfidfVectorizer(stop_words='english')
+        # Convert the text data to numerical features using TfidfVectorizer with n-grams (bigrams and trigrams)
+        tfidf_vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=5000)
         X_tfidf = tfidf_vectorizer.fit_transform(X)
+
+        # Generate additional features
+        # Message length (number of characters)
+        message_length = X.apply(len).values.reshape(-1, 1)
+        
+        # Count of exclamation marks
+        exclamation_count = X.apply(lambda x: x.count('!')).values.reshape(-1, 1)
+        
+        # Count of uppercase letters
+        uppercase_count = X.apply(lambda x: len(re.findall(r'[A-Z]', x))).values.reshape(-1, 1)
+        
+        # Keyword indicators (e.g., "free", "click", "subscribe")
+        keywords = ['free', 'click', 'subscribe']
+        keyword_indicators = np.array([X.str.contains(keyword, case=False).astype(int).values for keyword in keywords]).T
+
+        # Concatenate the additional features with TF-IDF vectors
+        from scipy.sparse import hstack
+        additional_features = np.hstack((message_length, exclamation_count, uppercase_count, keyword_indicators))
+        X_combined = hstack((X_tfidf, additional_features))
 
         # Initialize SMOTE
         smote = SMOTE(random_state=42)
 
         # Apply SMOTE to balance the dataset
-        X_resampled, y_resampled = smote.fit_resample(X_tfidf, y)
+        X_resampled, y_resampled = smote.fit_resample(X_combined, y)
 
         # Save the TF-IDF vectorizer and the resampled data using pickle
         with open(save_path, 'wb') as f:
