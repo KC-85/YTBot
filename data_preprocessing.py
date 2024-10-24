@@ -75,7 +75,7 @@ def save_preprocessed_data(df, output_path='preprocessed_data.pkl'):
 
 def main():
     # Path to the Excel dataset
-    dataset_path = 'Machine_learn_data.xlsx'
+    dataset_path = 'machine_learn_data.xlsx'
     
     # Load and preprocess the data
     df = load_and_preprocess_data(dataset_path)
