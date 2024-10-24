@@ -2,7 +2,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # Path to your downloaded service account key JSON file
-SERVICE_ACCOUNT_FILE = google_sheets.json
+SERVICE_ACCOUNT_FILE = 'google_sheets.json'
 
 # Define the required scopes
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
