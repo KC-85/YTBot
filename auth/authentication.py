@@ -2,9 +2,11 @@
 
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import logging
 import os
+import json
 
 def initialize_youtube_client(config):
     """
@@ -18,21 +20,25 @@ def initialize_youtube_client(config):
     """
     try:
         credentials_file = config.get("credentials_file", "credentials.json")
+        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
         
-        # Load credentials from the credentials file
-        if not os.path.exists(credentials_file):
+        # Load credentials from the file
+        credentials = None
+        if os.path.exists(credentials_file):
+            credentials = Credentials.from_authorized_user_file(credentials_file, scopes)
+        else:
             logging.error(f"Credentials file not found: {credentials_file}")
             return None
-        
-        credentials = Credentials.from_authorized_user_file(credentials_file)
         
         # Check if credentials need refreshing
         if credentials and credentials.expired and credentials.refresh_token:
             logging.info("Credentials expired. Attempting to refresh...")
             credentials.refresh(Request())
-            # Save the refreshed credentials back to the file
             save_credentials(credentials, credentials_file)
             logging.info("Credentials refreshed successfully.")
+        elif credentials and not credentials.refresh_token:
+            logging.error("No refresh token available. Re-run the OAuth flow.")
+            return None
         
         # Build the YouTube API client
         youtube_client = build("youtube", "v3", credentials=credentials)
@@ -66,13 +72,14 @@ def refresh_oauth_token(config):
     """
     try:
         credentials_file = config.get("credentials_file", "credentials.json")
+        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
         
         # Load credentials from the file
         if not os.path.exists(credentials_file):
             logging.error(f"Credentials file not found: {credentials_file}")
             return
         
-        credentials = Credentials.from_authorized_user_file(credentials_file)
+        credentials = Credentials.from_authorized_user_file(credentials_file, scopes)
         
         # Check if credentials need refreshing
         if credentials and credentials.expired and credentials.refresh_token:
@@ -85,3 +92,26 @@ def refresh_oauth_token(config):
 
     except Exception as e:
         logging.error(f"Error refreshing OAuth token: {e}")
+
+def authenticate_with_oauth_flow(config):
+    """
+    Authenticates with the YouTube API using OAuth flow and saves credentials.
+    
+    Parameters:
+        config (dict): The configuration dictionary containing API credentials and paths.
+    """
+    try:
+        client_secrets_file = config.get("client_secrets_file", "client_secret.json")
+        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
+        
+        # Initialize the OAuth flow
+        flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, scopes)
+        credentials = flow.run_local_server(port=0)
+        
+        # Save credentials to a file for future use
+        credentials_file = config.get("credentials_file", "credentials.json")
+        save_credentials(credentials, credentials_file)
+        logging.info("OAuth flow completed successfully and credentials saved.")
+    
+    except Exception as e:
+        logging.error(f"Error during OAuth flow: {e}")
