@@ -14,7 +14,7 @@ creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPE
 client = gspread.authorize(creds)
 
 # Open a Google Sheet by its title (make sure your service account has access)
-sheet = client.open("Your Google Sheet Title").sheet1
+sheet = client.open("Data spreadsheet").sheet1
 
 # Example: Read data from cell A1
 data = sheet.acell('A1').value
