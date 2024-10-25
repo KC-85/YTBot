@@ -8,7 +8,7 @@ import logging
 import os
 
 # Path to your credentials file
-CREDENTIALS_FILE = "credentials.json"
+CREDENTIALS_FILE = "/workspace/YTBot/credentials.json"
 # Path to your token file for saving and reusing credentials
 TOKEN_FILE = "token.json"
 
