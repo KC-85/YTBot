@@ -1,4 +1,4 @@
-# auth/secrets.py
+# auth/secretmanager.py
 
 import logging
 import os
