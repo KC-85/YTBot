@@ -1,117 +1,94 @@
 # auth/authentication.py
 
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 import logging
 import os
-import json
 
-def initialize_youtube_client(config):
+# Path to your credentials file
+CREDENTIALS_FILE = "credentials.json"
+# Path to your token file for saving and reusing credentials
+TOKEN_FILE = "token.json"
+
+# Define the required YouTube API scopes
+SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"]
+
+def initialize_youtube_client():
     """
     Initializes the YouTube API client using OAuth 2.0 credentials.
-    
-    Parameters:
-        config (dict): The configuration dictionary containing API credentials and paths.
     
     Returns:
         youtube_client (Resource): The initialized YouTube API client or None if failed.
     """
+    credentials = None
+
     try:
-        credentials_file = config.get("credentials_file", "credentials.json")
-        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
+        # Check if token file exists and load credentials
+        if os.path.exists(TOKEN_FILE):
+            credentials = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
         
-        # Load credentials from the file
-        credentials = None
-        if os.path.exists(credentials_file):
-            credentials = Credentials.from_authorized_user_file(credentials_file, scopes)
-        else:
-            logging.error(f"Credentials file not found: {credentials_file}")
-            return None
-        
-        # Check if credentials need refreshing
-        if credentials and credentials.expired and credentials.refresh_token:
-            logging.info("Credentials expired. Attempting to refresh...")
-            credentials.refresh(Request())
-            save_credentials(credentials, credentials_file)
-            logging.info("Credentials refreshed successfully.")
-        elif credentials and not credentials.refresh_token:
-            logging.error("No refresh token available. Re-run the OAuth flow.")
-            return None
-        
+        # If credentials don't exist or are expired, use InstalledAppFlow
+        if not credentials or not credentials.valid:
+            if credentials and credentials.expired and credentials.refresh_token:
+                logging.info("Credentials expired. Refreshing...")
+                credentials.refresh(Request())
+            else:
+                logging.info("No valid credentials available. Initiating OAuth flow...")
+                flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+                credentials = flow.run_local_server(port=0)
+                # Save the new credentials to the token file
+                save_credentials(credentials)
+
         # Build the YouTube API client
         youtube_client = build("youtube", "v3", credentials=credentials)
+        logging.info("YouTube API client initialized successfully.")
         return youtube_client
 
     except Exception as e:
         logging.error(f"Error initializing YouTube client: {e}")
         return None
 
-def save_credentials(credentials, credentials_file):
+def save_credentials(credentials):
     """
-    Saves the refreshed OAuth credentials back to the credentials file.
+    Saves the OAuth credentials to a file for future use.
     
     Parameters:
         credentials (Credentials): The OAuth credentials object.
-        credentials_file (str): The path to the credentials file.
     """
     try:
-        with open(credentials_file, "w") as token:
+        with open(TOKEN_FILE, 'w') as token:
             token.write(credentials.to_json())
         logging.info("Credentials saved successfully.")
     except Exception as e:
         logging.error(f"Error saving credentials: {e}")
 
-def refresh_oauth_token(config):
+def refresh_oauth_token():
     """
     Refreshes the OAuth token if it's expired or about to expire.
-    
-    Parameters:
-        config (dict): The configuration dictionary containing API credentials and paths.
     """
     try:
-        credentials_file = config.get("credentials_file", "credentials.json")
-        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
-        
-        # Load credentials from the file
-        if not os.path.exists(credentials_file):
-            logging.error(f"Credentials file not found: {credentials_file}")
-            return
-        
-        credentials = Credentials.from_authorized_user_file(credentials_file, scopes)
-        
-        # Check if credentials need refreshing
-        if credentials and credentials.expired and credentials.refresh_token:
-            logging.info("Refreshing OAuth token...")
-            credentials.refresh(Request())
-            save_credentials(credentials, credentials_file)
-            logging.info("OAuth token refreshed successfully.")
+        if os.path.exists(TOKEN_FILE):
+            credentials = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+
+            if credentials and credentials.expired and credentials.refresh_token:
+                logging.info("Refreshing OAuth token...")
+                credentials.refresh(Request())
+                save_credentials(credentials)
+                logging.info("OAuth token refreshed successfully.")
+            else:
+                logging.info("OAuth token is still valid. No refresh needed.")
         else:
-            logging.info("OAuth token is still valid. No refresh needed.")
+            logging.error("Token file not found. Run the OAuth flow to generate new credentials.")
 
     except Exception as e:
         logging.error(f"Error refreshing OAuth token: {e}")
 
-def authenticate_with_oauth_flow(config):
-    """
-    Authenticates with the YouTube API using OAuth flow and saves credentials.
-    
-    Parameters:
-        config (dict): The configuration dictionary containing API credentials and paths.
-    """
-    try:
-        client_secrets_file = config.get("client_secrets_file", "client_secret.json")
-        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
-        
-        # Initialize the OAuth flow
-        flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, scopes)
-        credentials = flow.run_local_server(port=0)
-        
-        # Save credentials to a file for future use
-        credentials_file = config.get("credentials_file", "credentials.json")
-        save_credentials(credentials, credentials_file)
-        logging.info("OAuth flow completed successfully and credentials saved.")
-    
-    except Exception as e:
-        logging.error(f"Error during OAuth flow: {e}")
+if __name__ == "__main__":
+    # Testing the initialization
+    youtube_client = initialize_youtube_client()
+    if youtube_client:
+        logging.info("YouTube client successfully initialized and ready for use.")
+    else:
+        logging.error("YouTube client initialization failed.")
