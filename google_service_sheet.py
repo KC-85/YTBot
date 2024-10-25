@@ -21,4 +21,4 @@ data = sheet.acell('A1').value
 print(f"Data in A1: {data}")
 
 # Example: Write data to cell A2
-sheet.update('A2', [['Hello, Google Sheets!']])
+sheet.update(range_name='A2', values=[['Hello, Google Sheets!']])
