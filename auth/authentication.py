@@ -37,12 +37,8 @@ def initialize_youtube_client():
             else:
                 logging.info("No valid credentials available. Initiating OAuth flow...")
                 flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-
-                # Use GitPod's public URL
-                flow.redirect_uri = 'https://kc85-ytbot-odtjmcat01n.ws.codeinstitute-ide.net/'
-
+                # Explicitly set the port to 8080 to match your Google Cloud Console redirect URI
                 credentials = flow.run_local_server(port=8080)
-                # Save the new credentials to the token file
                 save_credentials(credentials)
 
         # Build the YouTube API client
