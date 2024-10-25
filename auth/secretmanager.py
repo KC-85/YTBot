@@ -1,68 +1,92 @@
-# auth/secretmanager.py
+# auth/authentication.py
 
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
 import logging
 import os
-from google.cloud import secretmanager
-from google.auth.exceptions import DefaultCredentialsError
 
-def get_secret(secret_name, version="latest"):
+def initialize_youtube_client(config):
     """
-    Retrieves a secret value from Google Cloud Secret Manager.
+    Initializes the YouTube API client using OAuth 2.0 credentials.
     
     Parameters:
-        secret_name (str): The name of the secret in Google Cloud Secret Manager.
-        version (str): The version of the secret to retrieve (default is "latest").
+        config (dict): The configuration dictionary containing API credentials and paths.
     
     Returns:
-        str: The secret value if found, otherwise None.
+        youtube_client (Resource): The initialized YouTube API client or None if failed.
     """
     try:
-        client = secretmanager.SecretManagerServiceClient()
-
-        # Build the resource name of the secret version
-        project_id = os.getenv("PROJECT_ID")
-        if not project_id:
-            logging.error("Environment variable PROJECT_ID is not set.")
+        credentials_file = config.get("credentials_file", "credentials.json")
+        
+        # Load credentials from the credentials file
+        if not os.path.exists(credentials_file):
+            logging.error(f"Credentials file not found: {credentials_file}")
             return None
         
-        name = f"projects/{project_id}/secrets/{secret_name}/versions/{version}"
+        credentials = Credentials.from_authorized_user_file(credentials_file)
         
-        # Access the secret version
-        response = client.access_secret_version(request={"name": name})
-        secret_value = response.payload.data.decode("UTF-8")
+        # Check if credentials need refreshing
+        if credentials and credentials.expired and credentials.refresh_token:
+            logging.info("Credentials expired. Attempting to refresh...")
+            credentials.refresh(Request())
+            # Save the refreshed credentials back to the file
+            save_credentials(credentials, credentials_file)
+            logging.info("Credentials refreshed successfully.")
+        
+        # Build the YouTube API client
+        youtube_client = build("youtube", "v3", credentials=credentials)
+        
+        # Log success if the client is initialized
+        if youtube_client:
+            logging.info("YouTube API client initialized successfully.")
+        
+        return youtube_client
 
-        logging.info(f"Successfully retrieved secret: {secret_name}")
-        return secret_value
-
-    except DefaultCredentialsError:
-        logging.error("Google Cloud credentials not found. Please set up authentication.")
     except Exception as e:
-        logging.error(f"Error retrieving secret '{secret_name}': {e}")
-    
-    return None
+        logging.error(f"Error initializing YouTube client: {e}")
+        return None
 
-def get_env_or_secret(key, default=None):
+def save_credentials(credentials, credentials_file):
     """
-    Retrieves a value from environment variables or, if not available, from Google Cloud Secret Manager.
+    Saves the refreshed OAuth credentials back to the credentials file.
     
     Parameters:
-        key (str): The key to look up in the environment variables or secret name.
-        default (Any): The default value if the environment variable and secret are not found.
-    
-    Returns:
-        str: The value found in the environment or secret manager, otherwise the default value.
+        credentials (Credentials): The OAuth credentials object.
+        credentials_file (str): The path to the credentials file.
     """
-    # First, try to retrieve the value from environment variables
-    value = os.getenv(key)
-    if value:
-        logging.info(f"Retrieved {key} from environment variables.")
-        return value
+    try:
+        with open(credentials_file, "w") as token:
+            token.write(credentials.to_json())
+        logging.info("Credentials saved successfully.")
+    except Exception as e:
+        logging.error(f"Error saving credentials: {e}")
 
-    # If not found in environment, try retrieving from Google Cloud Secret Manager
-    logging.info(f"{key} not found in environment variables. Trying Secret Manager.")
-    secret_value = get_secret(key)
-    if secret_value:
-        return secret_value
+def refresh_oauth_token(config):
+    """
+    Refreshes the OAuth token if it's expired or about to expire.
+    
+    Parameters:
+        config (dict): The configuration dictionary containing API credentials and paths.
+    """
+    try:
+        credentials_file = config.get("credentials_file", "credentials.json")
+        
+        # Load credentials from the file
+        if not os.path.exists(credentials_file):
+            logging.error(f"Credentials file not found: {credentials_file}")
+            return
+        
+        credentials = Credentials.from_authorized_user_file(credentials_file)
+        
+        # Check if credentials need refreshing
+        if credentials and credentials.expired and credentials.refresh_token:
+            logging.info("Refreshing OAuth token...")
+            credentials.refresh(Request())
+            save_credentials(credentials, credentials_file)
+            logging.info("OAuth token refreshed successfully.")
+        else:
+            logging.info("OAuth token is still valid. No refresh needed.")
 
-    logging.warning(f"Using default value for {key}.")
-    return default
+    except Exception as e:
+        logging.error(f"Error refreshing OAuth token: {e}")
