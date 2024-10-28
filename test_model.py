@@ -1,10 +1,16 @@
-# test_model.py
-
 from ai.machine_learn import load_model, predict_spam
+import pickle
+import logging
 
 def main():
-    # Load the saved model with the file name "spam_detection_model.pkl"
+    # Load the saved model and vectorizer
     model = load_model("spam_detection_model.pkl")
+    try:
+        with open("preprocessed_data.pkl", "rb") as file:
+            _, _, tfidf_vectorizer = pickle.load(file)  # Load vectorizer only
+    except Exception as e:
+        logging.error(f"Error loading vectorizer: {e}")
+        return
 
     if model:
         # Define a list of test messages
@@ -24,8 +30,15 @@ def main():
         # Loop through each message and test it
         for i, message in enumerate(test_messages, start=1):
             print(f"Test Message {i}: '{message}'")
-            is_spam = predict_spam(model, message)
-            print(f"Is spam: {is_spam}\n")
+            try:
+                # Transform the message using the vectorizer
+                message_vector = tfidf_vectorizer.transform([message])
+                # Predict spam
+                is_spam = model.predict(message_vector)[0]
+                print(f"Is spam: {is_spam}\n")
+            except Exception as e:
+                logging.error(f"Error predicting spam for message '{message}': {e}")
+                print(f"Is spam: False\n")
 
     else:
         print("Failed to load the model. Please check the model file path and try again.")
