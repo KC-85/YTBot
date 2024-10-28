@@ -5,13 +5,14 @@ import numpy as np
 import re
 from scipy.sparse import hstack
 
-# Define additional preprocessing functions
-def preprocess_message(message):
+# Define additional preprocessing function with tfidf_vectorizer as a parameter
+def preprocess_message(message, tfidf_vectorizer):
     """
     Preprocesses a single message by applying TF-IDF transformation and additional features.
     
     Parameters:
         message (str): The text message to preprocess.
+        tfidf_vectorizer (TfidfVectorizer): The vectorizer used during model training.
     
     Returns:
         scipy.sparse matrix: Combined features (TF-IDF and additional features).
@@ -63,8 +64,8 @@ def main():
         for i, message in enumerate(test_messages, start=1):
             print(f"Test Message {i}: '{message}'")
             try:
-                # Preprocess the message to get combined features
-                message_features = preprocess_message(message)
+                # Preprocess the message to get combined features, passing in the vectorizer
+                message_features = preprocess_message(message, tfidf_vectorizer)
                 # Predict spam
                 is_spam = model.predict(message_features)[0]
                 print(f"Is spam: {is_spam}\n")
