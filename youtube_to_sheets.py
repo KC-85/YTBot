@@ -15,7 +15,7 @@ SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE')
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
 
-creds = Credentials.from_service_account_file(google_sheets.json, scopes=SCOPES)
+creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 sheets_client = gspread.authorize(creds)
 youtube_client = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
