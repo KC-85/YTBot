@@ -9,6 +9,9 @@ import logging
 from ai.sentiment_analysis import analyze_sentiment
 from dotenv import load_dotenv
 
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO)  # Enable INFO level logging
+
 # Load environment variables
 load_dotenv()
 
