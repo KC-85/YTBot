@@ -1,5 +1,7 @@
 import os
 import pickle
+import numpy as np  # Required for additional features in is_spam
+from scipy.sparse import hstack  # Required for combining features
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import gspread
@@ -19,21 +21,60 @@ creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPE
 sheets_client = gspread.authorize(creds)
 youtube_client = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
-def detect_keywords(comment, keywords):
-    detected_keywords = [keyword for keyword in keywords if keyword.lower() in comment.lower()]
-    return detected_keywords
+def get_video_owner_channel_id(video_id):
+    """Fetches the channel ID of the video owner."""
+    request = youtube_client.videos().list(
+        part="snippet",
+        id=video_id
+    )
+    response = request.execute()
+    if response['items']:
+        return response['items'][0]['snippet']['channelId']
+    else:
+        logging.error("Failed to retrieve video owner channel ID.")
+        return None
+
+def detect_keywords(comment, keywords, is_admin=False):
+    """Detects keywords in a comment, with contextual filtering for admins."""
+    admin_phrases = ["like subscribe share", "donate to cashapp"]
+
+    # If from an admin, skip if the comment contains typical admin phrases
+    if is_admin and any(phrase.lower() in comment.lower() for phrase in admin_phrases):
+        return []
+
+    # Otherwise, detect keywords normally
+    return [keyword for keyword in keywords if keyword.lower() in comment.lower()]
 
 def load_spam_model(model_path="spam_detection_model.pkl"):
+    """Loads the trained spam detection model from a pickle file."""
     with open(model_path, "rb") as f:
         model = pickle.load(f)
     return model
 
 def is_spam(comment, model, tfidf_vectorizer):
-    comment_features = tfidf_vectorizer.transform([comment])
+    """Determines if a comment is spam using the spam detection model."""
+    tfidf_features = tfidf_vectorizer.transform([comment])
+    
+    # Additional features: message length, exclamation marks, uppercase count
+    message_length = np.array([[len(comment)]])
+    exclamation_count = np.array([[comment.count('!')]])
+    uppercase_count = np.array([[sum(1 for c in comment if c.isupper())]])
+    
+    # Keyword indicators as used in training
+    keywords = ['giveaway', 'discount', 'subscribe']
+    keyword_indicators = np.array([[int(keyword in comment.lower()) for keyword in keywords]])
+    
+    # Combine TF-IDF and additional features
+    additional_features = np.hstack((message_length, exclamation_count, uppercase_count, keyword_indicators))
+    comment_features = hstack([tfidf_features, additional_features])
+
     return model.predict(comment_features)[0] == 1
 
 def fetch_youtube_comments(video_id, max_results=100):
+    """Fetches comments from a YouTube video and identifies if the commenter is an admin."""
     comments = []
+    channel_owner_id = get_video_owner_channel_id(video_id)
+    
     request = youtube_client.commentThreads().list(
         part="snippet",
         videoId=video_id,
@@ -45,11 +86,15 @@ def fetch_youtube_comments(video_id, max_results=100):
     for item in response.get('items', []):
         comment = item['snippet']['topLevelComment']['snippet']['textDisplay']
         author = item['snippet']['topLevelComment']['snippet']['authorDisplayName']
-        comments.append((author, comment))
+        author_channel_id = item['snippet']['topLevelComment']['snippet']['authorChannelId']['value']
+        is_admin = author_channel_id == channel_owner_id
+
+        comments.append((author, comment, is_admin))
     
     return comments
 
 def write_to_google_sheet(sheet_name, data):
+    """Writes processed data to a Google Sheet."""
     sheet = sheets_client.open(sheet_name).sheet1
     sheet.clear()
     headers = ["Author", "Comment", "Sentiment", "Keywords"]
@@ -58,6 +103,7 @@ def write_to_google_sheet(sheet_name, data):
     print("Data written to Google Sheet successfully.")
 
 def process_comments(video_id, sheet_name):
+    """Processes comments by analyzing sentiment, detecting keywords, and identifying spam."""
     model = load_spam_model()
     with open("preprocessed_data.pkl", "rb") as f:
         _, _, tfidf_vectorizer = pickle.load(f)
@@ -65,15 +111,16 @@ def process_comments(video_id, sheet_name):
     keywords = ["giveaway", "discount", "subscribe"]
     comments = fetch_youtube_comments(video_id)
     processed_comments = []
-    for author, comment in comments:
+    for author, comment, is_admin in comments:
         if not is_spam(comment, model, tfidf_vectorizer):
-            sentiment = analyze_sentiment(comment)  # Use the imported function
-            detected_keywords = detect_keywords(comment, keywords)
+            sentiment = analyze_sentiment(comment)
+            detected_keywords = detect_keywords(comment, keywords, is_admin=is_admin)
             processed_comments.append([author, comment, sentiment, ", ".join(detected_keywords)])
 
     write_to_google_sheet(sheet_name, processed_comments)
 
 def main(video_id, sheet_name):
+    """Main function to process comments and update Google Sheets."""
     process_comments(video_id, sheet_name)
 
 if __name__ == "__main__":
