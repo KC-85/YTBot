@@ -70,6 +70,12 @@ def fetch_youtube_comments(video_id, max_results=100):
         textFormat="plainText"
     )
 
+    page = 1
+    while request:
+        print(f"Fetching page {page} of comments...")
+        response = request.execute()
+        page += 1
+
     while request:
         response = request.execute()
         for item in response.get('items', []):
@@ -81,6 +87,7 @@ def fetch_youtube_comments(video_id, max_results=100):
         
         request = youtube_client.commentThreads().list_next(request, response)
 
+    print(f"Total comments fetched: {len(comments)}")
     return comments
 
 def write_to_google_sheet(sheet_name, data):
