@@ -95,6 +95,9 @@ def fetch_youtube_comments(video_id, max_results=100, max_pages=10):
 
             comments.append((author, comment, is_admin))
         
+        # Log page info to confirm pagination
+        logging.info(f"Fetched page {page_count + 1} with {len(response.get('items', []))} comments")
+        
         next_page_token = response.get('nextPageToken')
         if not next_page_token:
             break
@@ -114,7 +117,7 @@ def write_to_google_sheet(sheet_name, data):
         sheet.update('A1', [headers])
         start_row += 1
     
-    sheet.update(f'A{start_row}', data)
+    sheet.update(range_name=f'A{start_row}', values=data)
     print("Data appended to Google Sheet successfully.")
 
 def process_comments(video_id, sheet_name):
