@@ -73,7 +73,7 @@ def is_spam(comment, model, tfidf_vectorizer):
 
     return model.predict(comment_features)[0] == 1
 
-def fetch_youtube_comments(video_id, max_results=100, max_pages=10):
+def fetch_youtube_comments(video_id, max_results=1000, max_pages=50):
     """Fetches comments from a YouTube video, supports pagination, and identifies if the commenter is an admin."""
     comments = []
     channel_owner_id = get_video_owner_channel_id(video_id)
