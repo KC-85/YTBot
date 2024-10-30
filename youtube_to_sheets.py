@@ -39,7 +39,7 @@ def get_live_chat_id(video_id):
     live_chat_id = response['items'][0]['liveStreamingDetails'].get('activeLiveChatId')
     
     if not live_chat_id:
-        logging.error("No live chat found for this video. Ensure live chat replay is enabled.")
+        logging.error("No live chat found for this video. Ensure live chat replay is enabled or try another video.")
     return live_chat_id
 
 def detect_keywords(comment, keywords, is_admin=False):
