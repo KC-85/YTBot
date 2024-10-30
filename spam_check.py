@@ -11,7 +11,8 @@ load_dotenv()
 
 # Authenticate with Google Sheets
 SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE')
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 sheets_client = gspread.authorize(creds)
 
