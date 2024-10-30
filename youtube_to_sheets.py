@@ -24,7 +24,7 @@ creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPE
 sheets_client = gspread.authorize(creds)
 youtube_client = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
-# Function to get live chat ID
+# Function to get liveChatId if available
 def get_live_chat_id(video_id):
     """Fetches the liveChatId of a video if it's a live stream with chat replay enabled."""
     request = youtube_client.videos().list(
@@ -33,30 +33,29 @@ def get_live_chat_id(video_id):
     )
     response = request.execute()
 
-    # Log the full API response for debugging
-    logging.info(f"API response for video details: {response}")
+    # Log the full API response for further inspection
+    logging.info(f"Full API response: {response}")
 
-    live_chat_id = response['items'][0]['liveStreamingDetails'].get('activeLiveChatId')
-    
+    live_chat_id = response['items'][0].get('liveStreamingDetails', {}).get('activeLiveChatId')
     if not live_chat_id:
-        logging.error("No live chat found for this video. Ensure live chat replay is enabled or try another video.")
+        logging.error("No live chat ID found. Confirm that live chat replay is enabled and accessible for this video.")
     return live_chat_id
 
+# Keyword detection with admin filtering
 def detect_keywords(comment, keywords, is_admin=False):
-    """Detects keywords in a comment, with contextual filtering for admins."""
     admin_phrases = ["like subscribe share", "donate to cashapp"]
     if is_admin and any(phrase.lower() in comment.lower() for phrase in admin_phrases):
         return []
     return [keyword for keyword in keywords if keyword.lower() in comment.lower()]
 
+# Load spam detection model
 def load_spam_model(model_path="spam_detection_model.pkl"):
-    """Loads the trained spam detection model from a pickle file."""
     with open(model_path, "rb") as f:
         model = pickle.load(f)
     return model
 
+# Determine if a comment is spam
 def is_spam(comment, model, tfidf_vectorizer):
-    """Determines if a comment is spam using the spam detection model."""
     tfidf_features = tfidf_vectorizer.transform([comment])
     message_length = np.array([[len(comment)]])
     exclamation_count = np.array([[comment.count('!')]])
@@ -68,13 +67,8 @@ def is_spam(comment, model, tfidf_vectorizer):
     return model.predict(comment_features)[0] == 1
 
 # Fetch comments with pagination
-def fetch_youtube_live_chat_messages(video_id, max_results=200, max_pages=50):
-    """Fetches live chat messages from a YouTube live stream."""
+def fetch_youtube_comments(live_chat_id, max_results=100, max_pages=50):
     comments = []
-    live_chat_id = get_live_chat_id(video_id)
-    if not live_chat_id:
-        return comments  # Exit if no live chat ID found
-
     page_token = None
     page_count = 0
 
@@ -86,9 +80,8 @@ def fetch_youtube_live_chat_messages(video_id, max_results=200, max_pages=50):
             pageToken=page_token
         )
         response = request.execute()
-
         for item in response.get('items', []):
-            comment = item['snippet']['textMessageDetails']['messageText']
+            comment = item['snippet']['displayMessage']
             author = item['authorDetails']['displayName']
             author_channel_id = item['authorDetails']['channelId']
             is_admin = item['authorDetails']['isChatModerator'] or item['authorDetails']['isChatOwner']
@@ -96,34 +89,36 @@ def fetch_youtube_live_chat_messages(video_id, max_results=200, max_pages=50):
 
         page_token = response.get("nextPageToken")
         page_count += 1
-        logging.info(f"Fetched page {page_count} with {len(response.get('items', []))} live chat messages")
-        
+        logging.info(f"Fetched page {page_count} with {len(response.get('items', []))} comments")
         if not page_token:
-            break  # No more pages
+            break
 
     return comments
 
 # Append data to Google Sheets
 def write_to_google_sheet(sheet_name, data):
-    """Appends processed data to a Google Sheet."""
     sheet = sheets_client.open(sheet_name).sheet1
     existing_data = sheet.get_all_values()
     start_row = len(existing_data) + 1
     headers = ["Author", "Comment", "Sentiment", "Keywords"]
     if start_row == 1:
         sheet.append_row(headers)
-    sheet.append_rows(data, value_input_option="USER_ENTERED")
+    sheet.update(f'A{start_row}', data)
     logging.info("Data appended to Google Sheet successfully.")
 
 # Process comments and prepare data for appending
 def process_comments(video_id, sheet_name):
-    """Processes comments by analyzing sentiment, detecting keywords, and identifying spam."""
+    live_chat_id = get_live_chat_id(video_id)
+    if not live_chat_id:
+        logging.error("No live chat found for this video. Ensure live chat replay is enabled or try another video.")
+        return
+
     model = load_spam_model()
     with open("preprocessed_data.pkl", "rb") as f:
         _, _, tfidf_vectorizer = pickle.load(f)
 
     keywords = ["giveaway", "discount", "subscribe"]
-    comments = fetch_youtube_live_chat_messages(video_id)
+    comments = fetch_youtube_comments(live_chat_id)
     processed_comments = []
     for author, comment, is_admin in comments:
         if not is_spam(comment, model, tfidf_vectorizer):
@@ -135,7 +130,6 @@ def process_comments(video_id, sheet_name):
 
 # Main function to execute the process
 def main(video_id, sheet_name):
-    """Main function to process comments and update Google Sheets."""
     process_comments(video_id, sheet_name)
 
 if __name__ == "__main__":
