@@ -9,6 +9,7 @@ import logging
 import time
 from ai.sentiment_analysis import analyze_sentiment
 from dotenv import load_dotenv
+from googleapiclient.errors import HttpError
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -70,25 +71,34 @@ def fetch_youtube_comments(live_chat_id, max_results=100, max_pages=50):
     page_count = 0
 
     while page_count < max_pages:
-        request = youtube_client.liveChatMessages().list(
-            liveChatId=live_chat_id,
-            part="snippet,authorDetails",
-            maxResults=max_results,
-            pageToken=page_token
-        )
-        response = request.execute()
-        items = response.get('items', [])
-        comments.extend([
-            (item['authorDetails']['displayName'],
-             item['snippet']['displayMessage'],
-             item['authorDetails']['isChatModerator'] or item['authorDetails']['isChatOwner'])
-            for item in items
-        ])
-        page_token = response.get("nextPageToken")
-        page_count += 1
-        logging.info(f"Fetched page {page_count} with {len(items)} comments")
-        if not page_token:
-            break
+        try:
+            request = youtube_client.liveChatMessages().list(
+                liveChatId=live_chat_id,
+                part="snippet,authorDetails",
+                maxResults=max_results,
+                pageToken=page_token
+            )
+            response = request.execute()
+            items = response.get('items', [])
+            comments.extend([
+                (item['authorDetails']['displayName'],
+                 item['snippet']['displayMessage'],
+                 item['authorDetails']['isChatModerator'] or item['authorDetails']['isChatOwner'])
+                for item in items
+            ])
+            page_token = response.get("nextPageToken")
+            page_count += 1
+            logging.info(f"Fetched page {page_count} with {len(items)} comments")
+            if not page_token:
+                break
+        except HttpError as e:
+            if e.resp.status == 403 and "rateLimitExceeded" in str(e):
+                logging.warning("Rate limit exceeded. Waiting 15 seconds before retrying...")
+                time.sleep(15)
+            else:
+                logging.error(f"An error occurred: {e}")
+                break
+        time.sleep(5)  # Adjust delay here if necessary
 
     return comments
 
