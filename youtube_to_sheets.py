@@ -6,7 +6,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import gspread
 import logging
-from ai.sentiment_analysis import analyze_sentiment
+from ai.sentiment_analysis import analyze_sentiment  # Sentiment analysis module
 from dotenv import load_dotenv
 
 # Setup logging
@@ -24,13 +24,18 @@ creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPE
 sheets_client = gspread.authorize(creds)
 youtube_client = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
+# Function to get live chat ID
 def get_live_chat_id(video_id):
     """Fetches the liveChatId of a video if it's a live stream with chat replay enabled."""
     request = youtube_client.videos().list(
-        part="liveStreamingDetails",
+        part="liveStreamingDetails,snippet",
         id=video_id
     )
     response = request.execute()
+
+    # Log the full API response for debugging
+    logging.info(f"API response for video details: {response}")
+
     live_chat_id = response['items'][0]['liveStreamingDetails'].get('activeLiveChatId')
     
     if not live_chat_id:
@@ -62,6 +67,7 @@ def is_spam(comment, model, tfidf_vectorizer):
     comment_features = hstack([tfidf_features, additional_features])
     return model.predict(comment_features)[0] == 1
 
+# Fetch comments with pagination
 def fetch_youtube_live_chat_messages(video_id, max_results=200, max_pages=50):
     """Fetches live chat messages from a YouTube live stream."""
     comments = []
@@ -97,6 +103,7 @@ def fetch_youtube_live_chat_messages(video_id, max_results=200, max_pages=50):
 
     return comments
 
+# Append data to Google Sheets
 def write_to_google_sheet(sheet_name, data):
     """Appends processed data to a Google Sheet."""
     sheet = sheets_client.open(sheet_name).sheet1
@@ -108,6 +115,7 @@ def write_to_google_sheet(sheet_name, data):
     sheet.append_rows(data, value_input_option="USER_ENTERED")
     logging.info("Data appended to Google Sheet successfully.")
 
+# Process comments and prepare data for appending
 def process_comments(video_id, sheet_name):
     """Processes comments by analyzing sentiment, detecting keywords, and identifying spam."""
     model = load_spam_model()
@@ -125,11 +133,12 @@ def process_comments(video_id, sheet_name):
 
     write_to_google_sheet(sheet_name, processed_comments)
 
+# Main function to execute the process
 def main(video_id, sheet_name):
     """Main function to process comments and update Google Sheets."""
     process_comments(video_id, sheet_name)
 
 if __name__ == "__main__":
-    VIDEO_ID = "Y-vWrhvRWUE"  # Replace with your actual video ID
+    VIDEO_ID = "hm8XdEwsrFM"  # Replace with your actual video ID
     SHEET_NAME = "Data Spreadsheet"  # Replace with your Google Sheet's name
     main(VIDEO_ID, SHEET_NAME)
