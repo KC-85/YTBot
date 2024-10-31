@@ -31,7 +31,7 @@ def load_data_from_sheet(sheet_name):
     """
     sheet = sheets_client.open(sheet_name).sheet1
     # Define the headers we expect in the Google Sheet
-    expected_headers = ["CONTENT", "CLASS"]
+    expected_headers = ["Name", "Comment", "Sentiment", "Spam Status"]
     data = sheet.get_all_records(expected_headers=expected_headers)
     df = pd.DataFrame(data)
     return df
@@ -49,13 +49,13 @@ def preprocess_data_from_sheet(sheet_name, save_path):
         data = load_data_from_sheet(sheet_name)
 
         # Ensure the necessary columns exist in the dataset
-        if 'CONTENT' not in data.columns or 'CLASS' not in data.columns:
-            print("Dataset must contain 'CONTENT' and 'CLASS' columns.")
+        if 'Comment' not in data.columns or 'Spam Status' not in data.columns:
+            print("Dataset must contain 'Comment' and 'Spam Status' columns.")
             return
 
         # Separate features (messages) and target (labels)
-        X = data['CONTENT']
-        y = data['CLASS']
+        X = data['Comment']
+        y = data['Spam Status']
 
         # Convert the text data to numerical features using TfidfVectorizer with n-grams (bigrams and trigrams)
         tfidf_vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 3), max_features=5000)
