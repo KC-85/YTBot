@@ -46,6 +46,12 @@ def get_live_chat_id(video_id):
         logging.error(f"An error occurred while fetching live chat ID: {e}")
     return None
 
+# Load spam detection model
+def load_spam_model(model_path="spam_detection_model.pkl"):
+    with open(model_path, "rb") as f:
+        model = pickle.load(f)
+    return model
+
 # Detect keywords with admin filtering
 def detect_keywords(comment, keywords, is_admin=False):
     admin_phrases = ["like subscribe share", "donate to cashapp"]
@@ -53,7 +59,7 @@ def detect_keywords(comment, keywords, is_admin=False):
         return []
     return [keyword for keyword in keywords if keyword.lower() in comment.lower()]
 
-# Load spam detection model and vectorizer
+# Load preprocessed vectorizer
 def load_preprocessed_model_data():
     with open("preprocessed_data.pkl", "rb") as f:
         X_resampled, y_resampled, tfidf_vectorizer = pickle.load(f)
@@ -153,6 +159,6 @@ def main(video_id, sheet_name, interval=30):
         time.sleep(interval)
 
 if __name__ == "__main__":
-    VIDEO_ID = "IzjmtrPJMS4"  # Replace with your actual video ID
+    VIDEO_ID = "u7vfFb5SvH8"  # Replace with your actual video ID
     SHEET_NAME = "Data Spreadsheet"  # Replace with your Google Sheet's name
     main(VIDEO_ID, SHEET_NAME)
