@@ -64,7 +64,7 @@ def is_spam(comment, model, tfidf_vectorizer):
     comment_features = hstack([tfidf_features, additional_features])
     return model.predict(comment_features)[0] == 1
 
-# Fetch comments with pagination
+# Fetch comments with pagination, handling missing 'displayMessage'
 def fetch_youtube_comments(live_chat_id, max_results=100, max_pages=50):
     comments = []
     page_token = None
@@ -80,12 +80,15 @@ def fetch_youtube_comments(live_chat_id, max_results=100, max_pages=50):
             )
             response = request.execute()
             items = response.get('items', [])
-            comments.extend([
-                (item['authorDetails']['displayName'],
-                 item['snippet']['displayMessage'],
-                 item['authorDetails']['isChatModerator'] or item['authorDetails']['isChatOwner'])
-                for item in items
-            ])
+            for item in items:
+                author = item['authorDetails']['displayName']
+                is_admin = item['authorDetails']['isChatModerator'] or item['authorDetails']['isChatOwner']
+                # Check for 'displayMessage' key and handle cases where it's missing
+                comment_text = item['snippet'].get('displayMessage')
+                if comment_text:
+                    comments.append((author, comment_text, is_admin))
+                else:
+                    logging.warning("Skipped a comment due to missing 'displayMessage' field.")
             page_token = response.get("nextPageToken")
             page_count += 1
             logging.info(f"Fetched page {page_count} with {len(items)} comments")
@@ -102,29 +105,15 @@ def fetch_youtube_comments(live_chat_id, max_results=100, max_pages=50):
 
     return comments
 
-# Resize Google Sheet if needed
-def resize_sheet_if_needed(sheet, rows_needed):
-    """Resize the sheet if the number of rows needed exceeds current sheet size."""
-    current_row_count = len(sheet.get_all_values())
-    if rows_needed > current_row_count:
-        new_row_count = max(rows_needed, current_row_count * 2)
-        sheet.add_rows(new_row_count - current_row_count)
-
 # Append data to Google Sheets
 def write_to_google_sheet(sheet_name, data):
     sheet = sheets_client.open(sheet_name).sheet1
     existing_data = sheet.get_all_values()
     start_row = len(existing_data) + 1
-    end_row = start_row + len(data)
     headers = ["Author", "Comment", "Sentiment", "Keywords"]
-
-    # Resize sheet if more rows are needed
-    resize_sheet_if_needed(sheet, end_row)
-
     if start_row == 1:
         sheet.append_row(headers)
-    range_name = f'A{start_row}'
-    sheet.update(range_name, data)
+    sheet.update(values=data, range_name=f'A{start_row}')
     logging.info("Data appended to Google Sheet successfully.")
 
 # Process comments and prepare data for appending
@@ -158,6 +147,6 @@ def main(video_id, sheet_name, interval=30):
         time.sleep(interval)
 
 if __name__ == "__main__":
-    VIDEO_ID = "S1G87sNC6RY"  # Replace with your actual video ID
+    VIDEO_ID = "u7vfFb5SvH8"  # Replace with your actual video ID
     SHEET_NAME = "Data Spreadsheet"  # Replace with your Google Sheet's name
     main(VIDEO_ID, SHEET_NAME)
