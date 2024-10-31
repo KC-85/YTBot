@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 import gspread
 import logging
 import time
+import re
 from ai.sentiment_analysis import analyze_sentiment
 from dotenv import load_dotenv
 from googleapiclient.errors import HttpError
@@ -26,7 +27,14 @@ creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPE
 sheets_client = gspread.authorize(creds)
 youtube_client = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
-# Get live chat ID
+# Load pre-trained model and vectorizer
+with open("tfidf_vectorizer.pkl", "rb") as vec_file:
+    tfidf_vectorizer = pickle.load(vec_file)
+
+with open("spam_model.pkl", "rb") as model_file:
+    spam_model = pickle.load(model_file)
+
+# Function to get live chat ID
 def get_live_chat_id(video_id):
     request = youtube_client.videos().list(
         part="liveStreamingDetails,snippet",
@@ -39,6 +47,30 @@ def get_live_chat_id(video_id):
         return live_chat_id
     return None
 
+# Real-time preprocessing of comments
+def preprocess_comment(comment):
+    # Apply TF-IDF vectorization
+    tfidf_features = tfidf_vectorizer.transform([comment])
+
+    # Feature engineering
+    message_length = np.array([[len(comment)]])
+    exclamation_count = np.array([[comment.count('!')]])
+    uppercase_count = np.array([[len(re.findall(r'[A-Z]', comment))]])
+
+    keywords = ['free', 'click', 'subscribe']
+    keyword_indicators = np.array([[int(keyword in comment.lower()) for keyword in keywords]])
+
+    # Combine features
+    additional_features = np.hstack((message_length, exclamation_count, uppercase_count, keyword_indicators))
+    combined_features = hstack((tfidf_features, additional_features))
+
+    return combined_features
+
+# Spam detection
+def is_spam(comment):
+    features = preprocess_comment(comment)
+    return spam_model.predict(features)[0] == 1
+
 # Detect keywords with admin filtering
 def detect_keywords(comment, keywords, is_admin=False):
     admin_phrases = ["like subscribe share", "donate to cashapp"]
@@ -46,25 +78,7 @@ def detect_keywords(comment, keywords, is_admin=False):
         return []
     return [keyword for keyword in keywords if keyword.lower() in comment.lower()]
 
-# Load spam detection model
-def load_spam_model(model_path="spam_detection_model.pkl"):
-    with open(model_path, "rb") as f:
-        model = pickle.load(f)
-    return model
-
-# Determine if a comment is spam
-def is_spam(comment, model, tfidf_vectorizer):
-    tfidf_features = tfidf_vectorizer.transform([comment])
-    message_length = np.array([[len(comment)]])
-    exclamation_count = np.array([[comment.count('!')]])
-    uppercase_count = np.array([[sum(1 for c in comment if c.isupper())]])
-    keywords = ['giveaway', 'discount', 'subscribe']
-    keyword_indicators = np.array([[int(keyword in comment.lower()) for keyword in keywords]])
-    additional_features = np.hstack((message_length, exclamation_count, uppercase_count, keyword_indicators))
-    comment_features = hstack([tfidf_features, additional_features])
-    return model.predict(comment_features)[0] == 1
-
-# Fetch comments with pagination, handling missing 'displayMessage'
+# Fetch comments with pagination
 def fetch_youtube_comments(live_chat_id, max_results=100, max_pages=50):
     comments = []
     page_token = None
@@ -110,7 +124,7 @@ def write_to_google_sheet(sheet_name, data):
     sheet = sheets_client.open(sheet_name).sheet1
     existing_data = sheet.get_all_values()
     start_row = len(existing_data) + 1
-    headers = ["Author", "Comment", "Sentiment", "Keywords"]
+    headers = ["Author", "Comment", "Sentiment", "Keywords", "Spam"]
     if start_row == 1:
         sheet.append_row(headers)
     sheet.update(values=data, range_name=f'A{start_row}')
@@ -118,18 +132,15 @@ def write_to_google_sheet(sheet_name, data):
 
 # Process comments and prepare data for appending
 def process_comments(live_chat_id, sheet_name):
-    model = load_spam_model()
-    with open("preprocessed_data.pkl", "rb") as f:
-        _, _, tfidf_vectorizer = pickle.load(f)
-
     keywords = ["giveaway", "discount", "subscribe"]
     comments = fetch_youtube_comments(live_chat_id)
     processed_comments = []
     for author, comment, is_admin in comments:
-        if not is_spam(comment, model, tfidf_vectorizer):
+        if not is_spam(comment):  # Check if comment is not spam
             sentiment = analyze_sentiment(comment)
             detected_keywords = detect_keywords(comment, keywords, is_admin=is_admin)
-            processed_comments.append([author, comment, sentiment, ", ".join(detected_keywords)])
+            spam_status = "Not Spam" if not is_spam(comment) else "Spam"
+            processed_comments.append([author, comment, sentiment, ", ".join(detected_keywords), spam_status])
 
     write_to_google_sheet(sheet_name, processed_comments)
 
@@ -147,6 +158,6 @@ def main(video_id, sheet_name, interval=30):
         time.sleep(interval)
 
 if __name__ == "__main__":
-    VIDEO_ID = "C7Z5HrMtmNM"  # Replace with your actual video ID
+    VIDEO_ID = "u7vfFb5SvH8"  # Replace with your actual video ID
     SHEET_NAME = "Data Spreadsheet"  # Replace with your Google Sheet's name
     main(VIDEO_ID, SHEET_NAME)
