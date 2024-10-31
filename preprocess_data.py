@@ -21,7 +21,7 @@ sheets_client = gspread.authorize(creds)
 
 def load_data_from_sheet(sheet_name):
     """
-    Load data from Google Sheets.
+    Load data from Google Sheets with specific headers.
     
     Parameters:
         sheet_name (str): The name of the Google Sheet.
@@ -30,7 +30,9 @@ def load_data_from_sheet(sheet_name):
         DataFrame: Data loaded from the Google Sheet.
     """
     sheet = sheets_client.open(sheet_name).sheet1
-    data = sheet.get_all_records()
+    # Define the headers we expect in the Google Sheet
+    expected_headers = ["CONTENT", "CLASS"]
+    data = sheet.get_all_records(expected_headers=expected_headers)
     df = pd.DataFrame(data)
     return df
 
