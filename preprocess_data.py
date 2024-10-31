@@ -53,6 +53,12 @@ def preprocess_data_from_sheet(sheet_name, save_path):
             print("Dataset must contain 'Comment' and 'Spam Status' columns.")
             return
 
+        # Drop rows with missing comments
+        data = data.dropna(subset=['Comment'])
+        
+        # Convert all comments to strings to prevent type errors
+        data['Comment'] = data['Comment'].astype(str)
+
         # Separate features (messages) and target (labels)
         X = data['Comment']
         y = data['Spam Status']
